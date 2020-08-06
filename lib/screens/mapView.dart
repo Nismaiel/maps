@@ -14,6 +14,7 @@ class _MapViewState extends State<MapView> {
   GoogleMapController mapController;
   final Geolocator _geolocator = Geolocator();
   final startAddressController = TextEditingController();
+  final _scaffoldKey=GlobalKey<ScaffoldState>();
   Position _currentPosition;
   String _currentAddress;
   String _startAddress;
@@ -21,8 +22,8 @@ class _MapViewState extends State<MapView> {
   String _placeDistance;
   Set<Marker> markers = {};
   PolylinePoints _polylinePoints;
-  List<LatLng> polyLineCoordinates = [];
-  Map<PolylineId, Polyline> polyLines = {};
+  List<LatLng> polylineCoordinates = [];
+  Map<PolylineId, Polyline> polylines = {};
 
   _getAddress() async {
     try {
@@ -42,6 +43,7 @@ class _MapViewState extends State<MapView> {
     }
   }
 
+
   _getCurrentLocation() async {
     await _geolocator
         .getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
@@ -54,87 +56,132 @@ class _MapViewState extends State<MapView> {
                 target: LatLng(position.latitude, position.longitude),
                 zoom: 18.0)));
       });
+      await _getAddress();
     }).catchError((e) {
       print(e);
-    }).then((value) => _getAddress());
+    });
   }
-
+  // Method for calculating the distance between two places
   Future<bool> _calculateDistance() async {
-    List<Placemark> startPlaceMark =
-        await _geolocator.placemarkFromAddress(_startAddress);
-    List<Placemark> destinationPlaceMark =
-        await _geolocator.placemarkFromAddress(_destinationAddress);
+    try {
+      // Retrieving placemarks from addresses
+      List<Placemark> startPlacemark =
+      await _geolocator.placemarkFromAddress(_startAddress);
+      List<Placemark> destinationPlacemark =
+      await _geolocator.placemarkFromAddress(_destinationAddress);
 
-    Position startCoordinates = startPlaceMark[0].position;
-    Position destinationCoordinates = destinationPlaceMark[0].position;
-    if (startPlaceMark != null && destinationPlaceMark != null) {
-      // Use the retrieved coordinates of the current position,
-      // instead of the address if the start position is user's
-      // current position, as it results in better accuracy.
+      if (startPlacemark != null && destinationPlacemark != null) {
+        // Use the retrieved coordinates of the current position,
+        // instead of the address if the start position is user's
+        // current position, as it results in better accuracy.
+        Position startCoordinates = _startAddress == _currentAddress
+            ? Position(
+            latitude: _currentPosition.latitude,
+            longitude: _currentPosition.longitude)
+            : startPlacemark[0].position;
+        Position destinationCoordinates = destinationPlacemark[0].position;
 
-      Position startCoordinates = _startAddress == _currentAddress
-          ? Position(
-              latitude: _currentPosition.latitude,
-              longitude: _currentPosition.latitude)
-          : startPlaceMark[0].position;
-      Position destinationCoordinates = destinationPlaceMark[0].position;
+        // Start Location Marker
+        Marker startMarker = Marker(
+          markerId: MarkerId('$startCoordinates'),
+          position: LatLng(
+            startCoordinates.latitude,
+            startCoordinates.longitude,
+          ),
+          infoWindow: InfoWindow(
+            title: 'Start',
+            snippet: _startAddress,
+          ),
+          icon: BitmapDescriptor.defaultMarker,
+        );
 
-      //===============StartMarker========
-      Marker startMarker = Marker(
-        markerId: MarkerId('$startCoordinates'),
-        position: LatLng(startCoordinates.latitude, startCoordinates.longitude),
-        infoWindow: InfoWindow(title: 'Start', snippet: _startAddress),
-        icon: BitmapDescriptor.defaultMarker,
-      );
-      //===============DestinationMarker========
-      Marker destinationMarker = Marker(
+        // Destination Location Marker
+        Marker destinationMarker = Marker(
           markerId: MarkerId('$destinationCoordinates'),
-          position: LatLng(destinationCoordinates.latitude,
-              destinationCoordinates.longitude),
-          infoWindow:
-              InfoWindow(title: 'Destination', snippet: _destinationAddress),
-          icon: BitmapDescriptor.defaultMarker);
+          position: LatLng(
+            destinationCoordinates.latitude,
+            destinationCoordinates.longitude,
+          ),
+          infoWindow: InfoWindow(
+            title: 'Destination',
+            snippet: _destinationAddress,
+          ),
+          icon: BitmapDescriptor.defaultMarker,
+        );
 
-      //=====Adding the markers=========
-      markers.add(startMarker);
-      markers.add(destinationMarker);
+        // Adding the markers to the list
+        markers.add(startMarker);
+        markers.add(destinationMarker);
 
-      Position _northeastCoordinates;
-      Position _southwestCoordinates;
+        print('START COORDINATES: $startCoordinates');
+        print('DESTINATION COORDINATES: $destinationCoordinates');
 
-      // Calculating to check that southwest coordinate <= northeast coordinate
-      if (startCoordinates.latitude <= destinationCoordinates.latitude) {
-        _southwestCoordinates = startCoordinates;
-        _northeastCoordinates = destinationCoordinates;
-      } else {
-        _southwestCoordinates = destinationCoordinates;
-        _northeastCoordinates = startCoordinates;
+        Position _northeastCoordinates;
+        Position _southwestCoordinates;
+
+        // Calculating to check that
+        // southwest coordinate <= northeast coordinate
+        if (startCoordinates.latitude <= destinationCoordinates.latitude) {
+          _southwestCoordinates = startCoordinates;
+          _northeastCoordinates = destinationCoordinates;
+        } else {
+          _southwestCoordinates = destinationCoordinates;
+          _northeastCoordinates = startCoordinates;
+        }
+
+        // Accommodate the two locations within the
+        // camera view of the map
+        mapController.animateCamera(
+          CameraUpdate.newLatLngBounds(
+            LatLngBounds(
+              northeast: LatLng(
+                _northeastCoordinates.latitude,
+                _northeastCoordinates.longitude,
+              ),
+              southwest: LatLng(
+                _southwestCoordinates.latitude,
+                _southwestCoordinates.longitude,
+              ),
+            ),
+            100.0,
+          ),
+        );
+        // Calculating the distance between the start and the end positions
+        // with a straight path, without considering any route
+        // double distanceInMeters = await Geolocator().bearingBetween(
+        //   startCoordinates.latitude,
+        //   startCoordinates.longitude,
+        //   destinationCoordinates.latitude,
+        //   destinationCoordinates.longitude,
+        // );
+
+        await _createPolyLines(startCoordinates, destinationCoordinates);
+
+        double totalDistance = 0.0;
+
+        // Calculating the total distance by adding the distance
+        // between small segments
+        for (int i = 0; i < polylineCoordinates.length - 1; i++) {
+          totalDistance += _coordinateDistance(
+            polylineCoordinates[i].latitude,
+            polylineCoordinates[i].longitude,
+            polylineCoordinates[i + 1].latitude,
+            polylineCoordinates[i + 1].longitude,
+          );
+        }
+
+        setState(() {
+          _placeDistance = totalDistance.toStringAsFixed(2);
+          print('DISTANCE: $_placeDistance km');
+        });
+
+        return true;
       }
-      //accomidate the two locations with the  two locations of the map in the camera view
-      mapController.animateCamera(CameraUpdate.newLatLngBounds(
-          LatLngBounds(
-              southwest: LatLng(_southwestCoordinates.latitude,
-                  _southwestCoordinates.longitude),
-              northeast: LatLng(_northeastCoordinates.longitude,
-                  _northeastCoordinates.longitude)),
-          100.0));
-
-      //calc distance between the two markers with straigth path(now routing)
-      await _createPolyLines(startCoordinates, destinationCoordinates);
-      double totalDistance = 0.0;
-      for (int i = 0; i < polyLineCoordinates.length - 1; i++) {
-        totalDistance += _coordinateDistance(
-            polyLineCoordinates[i].latitude,
-            polyLineCoordinates[i].longitude,
-            polyLineCoordinates[i + 1].latitude,
-            polyLineCoordinates[i + 1].longitude);
-      }
-      setState(() {
-        _placeDistance=totalDistance.toStringAsFixed(2);
-      });
+    } catch (e) {
+      print(e);
     }
-  }
-
+    return false;
+      }
   _createPolyLines(Position start, Position destination) async {
     _polylinePoints = PolylinePoints();
     PolylineResult result = await _polylinePoints.getRouteBetweenCoordinates(
@@ -145,16 +192,16 @@ class _MapViewState extends State<MapView> {
     if (result.points.isNotEmpty) {
       //Adding the coordinates to the list
       result.points.forEach((PointLatLng point) {
-        polyLineCoordinates.add(LatLng(point.latitude, point.longitude));
+        polylineCoordinates.add(LatLng(point.latitude, point.longitude));
       });
     }
     PolylineId id = PolylineId('poly');
     Polyline polyline = Polyline(
         polylineId: id,
         color: Colors.orange[100],
-        points: polyLineCoordinates,
+        points: polylineCoordinates,
         width: 3);
-    polyLines[id] = polyline;
+    polylines[id] = polyline;
   }
 
   double _coordinateDistance(lat1, lon1, lat2, lon2) {
@@ -178,11 +225,12 @@ class _MapViewState extends State<MapView> {
     return Container(
       height: MediaQuery.of(context).size.height,
       width: MediaQuery.of(context).size.height,
-      child: Scaffold(
+      child: Scaffold(key: _scaffoldKey,
         body: Stack(
           children: [
             GoogleMap(
-              polylines: Set<Polyline>.of(polyLines.values),
+              markers: markers != null ? Set<Marker>.from(markers) : null,
+              polylines: Set<Polyline>.of(polylines.values),
               initialCameraPosition: _cameraPosition,
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
@@ -258,33 +306,66 @@ class _MapViewState extends State<MapView> {
                         ),
                       ),
                       Visibility(
-                        visible: _placeDistance==null?false:true,
-                        child: Column(children: [SizedBox(height: 5,),Text('Distance: $_placeDistance km',style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold),)],),
+                        visible: _placeDistance == null ? false : true,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 5,
+                            ),
+                            Text(
+                              'Distance: $_placeDistance km',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            )
+                          ],
+                        ),
                       ),
                       SizedBox(
-                        height: 15,
+                        height: 5,
                       ),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          width: MediaQuery.of(context).size.width / 1.8,
-                          height: 35,
-                          child: InkWell(
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                'SHOW ROUTE',
-                                style: TextStyle(
-                                    color: Colors.white, fontSize: 18),
-                                textAlign: TextAlign.center,
-                              ),
+                  RaisedButton(
+                    onPressed: (_startAddress != '' &&
+                        _destinationAddress != '')
+                        ? () async {
+                      setState(() {
+                        if (markers.isNotEmpty) markers.clear();
+                        if (polylines.isNotEmpty)
+                          polylines.clear();
+                        if (polylineCoordinates.isNotEmpty)
+                          polylineCoordinates.clear();
+                        _placeDistance = null;
+                      });
+
+                      _calculateDistance().then((isCalculated) {
+                        if (isCalculated) {
+                          _scaffoldKey.currentState.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Distance Calculated Sucessfully'),
                             ),
-                            onTap: () {},
-                          ),
-                          color: Colors.red,
-                        ),
-                      )
-                    ],
+                          );
+                        } else {
+                          _scaffoldKey.currentState.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Error Calculating Distance'),
+                            ),
+                          );
+                        }
+                      });
+                    }
+                        : null,
+                    color: Colors.red,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20.0),
+                    ),  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      'Show Route'.toUpperCase(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20.0,
+                      ),),),)],
                   ),
                 )),
           ],
