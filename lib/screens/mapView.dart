@@ -49,10 +49,10 @@ class _MapViewState extends State<MapView> {
                 target: LatLng(position.latitude, position.longitude),
                 zoom: 18.0)));
       });
-      await _getAddress();
+
     }).catchError((e) {
       print(e);
-    });
+    }).then((value) => _getAddress());
   }
 
   Future<bool> _calculateDistance() async {
@@ -108,7 +108,6 @@ class _MapViewState extends State<MapView> {
       mapController.animateCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(_southwestCoordinates.latitude,_southwestCoordinates.longitude), northeast: LatLng(_northeastCoordinates.longitude, _northeastCoordinates.longitude)), 100.0));
 
       //calc distance between the two markers with straigth path(now routing)
-      await
     }
   }
 
@@ -117,7 +116,7 @@ class _MapViewState extends State<MapView> {
     // TODO: implement initState
     super.initState();
     _getCurrentLocation();
-    _getAddress();
+//    _getAddress();
   }
 
   @override
@@ -183,7 +182,7 @@ class _MapViewState extends State<MapView> {
                               .of(context)
                               .size
                               .width / 1.2,
-                          height: 40,
+                          height: 60,
                           child: TextField(
                             controller: startAddressController,
                             decoration: InputDecoration(
@@ -204,7 +203,7 @@ class _MapViewState extends State<MapView> {
                             .of(context)
                             .size
                             .width / 1.2,
-                        height: 40,
+                        height: 60,
                         child: TextField(
                           decoration: InputDecoration(
                               prefixIcon: Icon(Icons.looks_two),
