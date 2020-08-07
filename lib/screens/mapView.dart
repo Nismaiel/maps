@@ -16,15 +16,17 @@ class _MapViewState extends State<MapView> {
   final startAddressController = TextEditingController();
   final destinationAddressController = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final Set<Polyline> polyline = {};
+  Map<PolylineId, Polyline> polylines = {};
+  List<LatLng> polylineCoordinates = [];
+  PolylinePoints polylinePoints = PolylinePoints();
+  String googleAPiKey = 'AIzaSyCShaIyht8QiAtoSg0hd_v0PQLBH_YQKtM';
   Position _currentPosition;
   String _currentAddress;
   String _startAddress;
   String _destinationAddress;
   String _placeDistance;
   Set<Marker> markers = {};
-  PolylinePoints _polylinePoints;
-  List<LatLng> polylineCoordinates = [];
-  Map<PolylineId, Polyline> polylines = {};
 
   _getAddress() async {
     try {
@@ -35,7 +37,8 @@ class _MapViewState extends State<MapView> {
 
       setState(() {
         _currentAddress =
-            "${place.name}, ${place.locality}, ${place.postalCode}, ${place.country}";
+        "${place.name}, ${place.locality}, ${place.postalCode}, ${place
+            .country}";
         startAddressController.text = _currentAddress;
         _startAddress = _currentAddress;
       });
@@ -64,6 +67,7 @@ class _MapViewState extends State<MapView> {
       });
 
       await _getAddress();
+      _addpolyline();
     }).catchError((e) {
       print(e);
     });
@@ -129,15 +133,64 @@ class _MapViewState extends State<MapView> {
 
   _handleMarkers(LatLng tappedPoint) {
     setState(() {
-
-      markers.add(Marker(
+      markers.length > 1
+          ? markers.remove(markers.last)
+          : markers.add(Marker(
           markerId: MarkerId(tappedPoint.toString()),
           position: tappedPoint,
           onTap: () {
+            if (markers.last.markerId ==
+                'MarkerId{value: ${tappedPoint.toString()}') {
+              setState(() {
+                markers.removeWhere((element) =>
+                element.markerId == tappedPoint.toString());
+              });
+            }
+            print(markers.last.markerId.toString());
+            print('MarkerId{value: ${tappedPoint.toString()}}');
           },
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueRed),
           draggable: true));
     });
+    _addpolyline();
+    _getPolyLine();
+  }
+
+  _addpolyline() {
+    PolylineId id = PolylineId('poly');
+    Polyline polyline = Polyline(polylineId: id,
+        color: Colors.blue,
+        points: [
+          LatLng(markers.first.position.latitude,
+              markers.first.position.longitude),
+          LatLng(
+              markers.last.position.latitude, markers.last.position.longitude)
+        ],
+        width: 4,
+        visible: true,
+        startCap: Cap.roundCap,
+        endCap: Cap.buttCap);
+    setState(() {
+
+    });
+  }
+
+  _getPolyLine() async {
+    PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
+        googleAPiKey, PointLatLng(
+        markers.first.position.latitude, markers.first.position.longitude),
+        PointLatLng(
+            markers.last.position.latitude, markers.last.position.longitude),
+    travelMode: TravelMode.driving,
+
+    );
+    if(result.points.isNotEmpty){
+      result.points.forEach((PointLatLng point) {
+        polylineCoordinates.add(LatLng(point.latitude, point.longitude));
+      });
+    }
+    _addpolyline();
   }
 
   @override
@@ -150,8 +203,14 @@ class _MapViewState extends State<MapView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height,
-      width: MediaQuery.of(context).size.height,
+      height: MediaQuery
+          .of(context)
+          .size
+          .height,
+      width: MediaQuery
+          .of(context)
+          .size
+          .height,
       child: Scaffold(
         key: _scaffoldKey,
         body: Stack(
@@ -159,15 +218,16 @@ class _MapViewState extends State<MapView> {
             GoogleMap(
               onTap: _handleMarkers,
               markers: markers != null ? Set<Marker>.from(markers) : null,
-              polylines: Set<Polyline>.of(polylines.values),
               initialCameraPosition: _cameraPosition,
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               mapType: MapType.normal,
               zoomGesturesEnabled: true,
+              polylines: polyline != null ?Set<Polyline>.of(polylines.values) : null,
               zoomControlsEnabled: true,
               onMapCreated: (GoogleMapController controller) {
                 mapController = controller;
+
               },
             ),
             Positioned(
@@ -204,7 +264,10 @@ class _MapViewState extends State<MapView> {
                     children: [
                       Text('Places'),
                       Container(
-                        width: MediaQuery.of(context).size.width / 1.2,
+                        width: MediaQuery
+                            .of(context)
+                            .size
+                            .width / 1.2,
                         height: 60,
                         child: _textField(
                             label: 'Start',
@@ -218,7 +281,10 @@ class _MapViewState extends State<MapView> {
                               },
                             ),
                             controller: startAddressController,
-                            width: MediaQuery.of(context).size.width / 1.2,
+                            width: MediaQuery
+                                .of(context)
+                                .size
+                                .width / 1.2,
                             locationCallback: (String value) {
                               setState(() {
                                 _startAddress = value;
@@ -229,14 +295,20 @@ class _MapViewState extends State<MapView> {
                         height: 10,
                       ),
                       Container(
-                        width: MediaQuery.of(context).size.width / 1.2,
+                        width: MediaQuery
+                            .of(context)
+                            .size
+                            .width / 1.2,
                         height: 60,
                         child: _textField(
                             label: 'Destination',
                             hint: 'Choose destination',
                             prefixIcon: Icon(Icons.looks_two),
                             controller: destinationAddressController,
-                            width: MediaQuery.of(context).size.width / 1.2,
+                            width: MediaQuery
+                                .of(context)
+                                .size
+                                .width / 1.2,
                             locationCallback: (String value) {
                               setState(() {
                                 _destinationAddress = value;
@@ -262,9 +334,7 @@ class _MapViewState extends State<MapView> {
                         height: 5,
                       ),
                       RaisedButton(
-                        onPressed:(){}
-
-                            ,
+                        onPressed: () {},
                         color: Colors.red,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20.0),
