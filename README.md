@@ -2,6 +2,8 @@
 
 A new Flutter application.
 
+USING GCP SERVICES FOR GOOGLE MAPS
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
