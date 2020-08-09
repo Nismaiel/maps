@@ -20,7 +20,7 @@ class _MapViewState extends State<MapView> {
   Map<PolylineId, Polyline> polylines = {};
   List<LatLng> polylineCoordinates = [];
   PolylinePoints polylinePoints = PolylinePoints();
-  String googleAPiKey = 'AIzaSyCShaIyht8QiAtoSg0hd_v0PQLBH_YQKtM';
+  String googleAPiKey = 'Your_API_KEY';
   Position _currentPosition;
   String _currentAddress;
   String _startAddress;
